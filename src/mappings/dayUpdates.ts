@@ -1,7 +1,7 @@
 /* eslint-disable prefer-const */
 import { BigDecimal, BigInt, ethereum } from '@graphprotocol/graph-ts'
 import { Bundle, Pair, PairDayData, Token, TokenDayData, UniswapDayData, UniswapFactory } from '../types/schema'
-import { PairHourData } from './../types/schema'
+import { PairHourData, Pair15MinutesData } from './../types/schema'
 import { FACTORY_ADDRESS, ONE_BI, ZERO_BD, ZERO_BI } from './helpers'
 
 export function updateUniswapDayData(event: ethereum.Event): UniswapDayData {
@@ -72,6 +72,8 @@ export function updatePairHourData(event: ethereum.Event): PairHourData {
   let pairHourData = PairHourData.load(hourPairID)
   if (pairHourData === null) {
     pairHourData = new PairHourData(hourPairID)
+    pairHourData.token0 = pair.token0
+    pairHourData.token1 = pair.token1
     pairHourData.hourStartUnix = hourStartUnix
     pairHourData.pair = event.address.toHexString()
     pairHourData.hourlyVolumeToken0 = ZERO_BD
@@ -90,6 +92,37 @@ export function updatePairHourData(event: ethereum.Event): PairHourData {
   return pairHourData as PairHourData
 }
 
+export function updatePair15MinutesData(event: ethereum.Event): Pair15MinutesData {
+  let timestamp = event.block.timestamp.toI32()
+  let index = timestamp / 900 // get unique hour within unix history
+  let startUnix = index * 900 // want the rounded effect
+  let pairId = event.address
+    .toHexString()
+    .concat('-')
+    .concat(BigInt.fromI32(index).toString())
+  let pair = Pair.load(event.address.toHexString())
+  let pair15MinutesData = Pair15MinutesData.load(pairId)
+  if (pair15MinutesData === null) {
+    pair15MinutesData = new Pair15MinutesData(pairId)
+    pair15MinutesData.token0 = pair.token0
+    pair15MinutesData.token1 = pair.token1
+    pair15MinutesData.startUnix = startUnix
+    pair15MinutesData.pair = event.address.toHexString()
+    pair15MinutesData.volumeToken0 = ZERO_BD
+    pair15MinutesData.volumeToken1 = ZERO_BD
+    pair15MinutesData.volumeUSD = ZERO_BD
+    pair15MinutesData.txns = ZERO_BI
+  }
+
+  pair15MinutesData.totalSupply = pair.totalSupply
+  pair15MinutesData.reserve0 = pair.reserve0
+  pair15MinutesData.reserve1 = pair.reserve1
+  pair15MinutesData.reserveUSD = pair.reserveUSD
+  pair15MinutesData.txns = pair15MinutesData.txns.plus(ONE_BI)
+  pair15MinutesData.save()
+
+  return pair15MinutesData as Pair15MinutesData
+}
 export function updateTokenDayData(token: Token, event: ethereum.Event): TokenDayData {
   let bundle = Bundle.load('1')
   let timestamp = event.block.timestamp.toI32()
